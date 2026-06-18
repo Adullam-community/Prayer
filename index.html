@@ -60,14 +60,30 @@
 
   #view-list { padding: 2px 24px 40px; }
   .list-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-  .list-count { font-size: 13.5px; color: #8B9682; }
+  .list-count { font-size: 13.5px; color: #8B9682; white-space: nowrap; }
   .list-count b { color: #3FA635; }
-  .refresh { padding: 8px 13px; background: #E6F2DE; border: none; border-radius: 20px; font-size: 12.5px; font-weight: 700; color: #3FA635; cursor: pointer; font-family: inherit; }
+  .refresh { padding: 8px 13px; background: #E6F2DE; border: none; border-radius: 20px; font-size: 12.5px; font-weight: 700; color: #3FA635; cursor: pointer; font-family: inherit; flex: none; white-space: nowrap; }
+  .month-tabs { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 14px; }
+  .month-tabs::-webkit-scrollbar { height: 0; }
+  .month-tab { flex: none; padding: 7px 15px; border-radius: 20px; border: 1.5px solid #DCE6D0; background: #fff; color: #8B9682; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; transition: all .15s; }
+  .month-tab.active { background: #3FA635; color: #fff; border-color: #3FA635; }
+  .sort-row { display: flex; gap: 7px; margin-bottom: 14px; }
+  .sort-pill { padding: 6px 14px; border-radius: 18px; border: 1.5px solid #DCE6D0; background: #fff; color: #8B9682; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit; transition: all .15s; white-space: nowrap; }
+  .sort-pill.active { background: #2B3326; color: #fff; border-color: #2B3326; }
+  .group { background: #fff; border: 1px solid #DCE6D0; border-left: 3px solid #3FA635; border-radius: 14px; padding: 14px 16px; }
+  .group-h { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .group-name { font-size: 15px; font-weight: 700; color: #2B3326; white-space: nowrap; }
+  .group-count { font-size: 11px; font-weight: 700; color: #3FA635; background: #E6F2DE; padding: 2px 8px; border-radius: 20px; }
+  .group-items { display: flex; flex-direction: column; }
+  .g-item { padding: 11px 0; border-top: 1px solid #EEF1E7; }
+  .g-item:first-child { border-top: none; padding-top: 0; }
+  .g-time { font-size: 11px; color: #A7B19C; margin-bottom: 4px; }
+  .g-body { font-size: 14px; color: #47503E; line-height: 1.75; white-space: pre-wrap; word-break: break-word; }
   .cards { display: flex; flex-direction: column; gap: 12px; }
   .card { background: #fff; border: 1px solid #DCE6D0; border-left: 3px solid #3FA635; border-radius: 14px; padding: 16px 17px; }
   .card-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
-  .card-name { font-size: 15px; font-weight: 700; color: #2B3326; }
-  .card-time { font-size: 11.5px; color: #A7B19C; flex: none; }
+  .card-name { font-size: 15px; font-weight: 700; color: #2B3326; white-space: nowrap; }
+  .card-time { font-size: 11.5px; color: #A7B19C; flex: none; white-space: nowrap; }
   .card-body { font-size: 14px; color: #47503E; line-height: 1.78; white-space: pre-wrap; word-break: break-word; }
   .state { text-align: center; padding: 50px 20px; color: #8B9682; font-size: 14px; line-height: 1.7; }
   .spinner { width: 30px; height: 30px; border: 3px solid #E6F2DE; border-top-color: #3FA635; border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 14px; }
@@ -114,8 +130,13 @@
     </section>
 
     <section id="view-list" style="display:none">
+      <div id="month-tabs" class="month-tabs"></div>
+      <div class="sort-row">
+        <button id="sort-latest" class="sort-pill active" onclick="setSort('latest')">최신순</button>
+        <button id="sort-name" class="sort-pill" onclick="setSort('name')">이름별</button>
+      </div>
       <div class="list-head">
-        <div class="list-count">함께 기도하는 제목 <b id="count2">0</b>개</div>
+        <div class="list-count" id="list-count">기도제목</div>
         <button class="refresh" onclick="loadList()">새로고침</button>
       </div>
       <div id="list-area"></div>
@@ -128,6 +149,10 @@
 <script>
   var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyHVVRaPMsUaebMlzWlkTOohxdtyBqYvwmDjrXIKd9IQ-5A4je7jahEVtICwxNRibXe/exec';
   var listLoaded = false;
+  var allData = [];
+  var curMonth = null;
+  var multiYear = false;
+  var sortMode = 'latest';
 
   var prayerEl = document.getElementById('prayer');
   var nameEl = document.getElementById('name');
@@ -194,27 +219,119 @@
       .then(function (r) { return r.json(); })
       .then(function (data) {
         listLoaded = true;
-        var list = Array.isArray(data) ? data : [];
-        document.getElementById('count').textContent = list.length;
-        document.getElementById('count2').textContent = list.length;
-        if (list.length === 0) {
+        allData = Array.isArray(data) ? data : [];
+        document.getElementById('count').textContent = allData.length;
+        if (allData.length === 0) {
+          document.getElementById('month-tabs').innerHTML = '';
+          document.getElementById('list-count').innerHTML = '기도제목 0개';
           area.innerHTML = '<div class="state">아직 나눠진 기도제목이 없어요.<br>첫 기도제목을 남겨주세요.</div>';
           return;
         }
-        var html = '<div class="cards">';
-        for (var i = list.length - 1; i >= 0; i--) {
-          var it = list[i] || {};
-          html += '<div class="card"><div class="card-h"><span class="card-name">' +
-            esc(it.name || '익명') + '</span><span class="card-time">' +
-            esc(fmtTime(it.timestamp)) + '</span></div><div class="card-body">' +
-            esc(it.prayer || '') + '</div></div>';
-        }
-        html += '</div>';
-        area.innerHTML = html;
+        var months = getMonths();
+        if (months.indexOf(curMonth) === -1) curMonth = months[0];
+        renderMonths(months);
+        renderCards();
       })
       .catch(function () {
+        document.getElementById('month-tabs').innerHTML = '';
         area.innerHTML = '<div class="state">불러오는 데 실패했어요.<br><button class="btn" style="max-width:160px;margin:14px auto 0" onclick="loadList()">다시 시도</button></div>';
       });
+  }
+
+  function monthKey(ts) {
+    var d = new Date(ts);
+    if (isNaN(d.getTime())) return 'unknown';
+    return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2);
+  }
+  function monthLabel(key) {
+    if (key === 'all') return '전체';
+    if (key === 'unknown') return '기타';
+    var p = key.split('-');
+    return multiYear ? (p[0].slice(2) + '년 ' + Number(p[1]) + '월') : (Number(p[1]) + '월');
+  }
+  function getMonths() {
+    var seen = {}, years = {};
+    allData.forEach(function (it) {
+      var k = monthKey(it && it.timestamp);
+      seen[k] = true;
+      if (k !== 'unknown') years[k.split('-')[0]] = true;
+    });
+    multiYear = Object.keys(years).length > 1;
+    return Object.keys(seen).sort(function (a, b) {
+      if (a === 'unknown') return 1;
+      if (b === 'unknown') return -1;
+      return a < b ? 1 : -1;
+    });
+  }
+  function renderMonths(months) {
+    var html = '<button class="month-tab' + (curMonth === 'all' ? ' active' : '') + '" onclick="selectMonth(\'all\')">전체</button>';
+    for (var i = 0; i < months.length; i++) {
+      html += '<button class="month-tab' + (curMonth === months[i] ? ' active' : '') +
+        '" onclick="selectMonth(\'' + months[i] + '\')">' + esc(monthLabel(months[i])) + '</button>';
+    }
+    document.getElementById('month-tabs').innerHTML = html;
+  }
+  function selectMonth(key) {
+    curMonth = key;
+    renderMonths(getMonths());
+    renderCards();
+  }
+  function setSort(mode) {
+    sortMode = mode;
+    document.getElementById('sort-latest').classList.toggle('active', mode === 'latest');
+    document.getElementById('sort-name').classList.toggle('active', mode === 'name');
+    renderCards();
+  }
+  function tsVal(it) {
+    var d = new Date(it && it.timestamp);
+    return isNaN(d.getTime()) ? 0 : d.getTime();
+  }
+  function renderCards() {
+    var area = document.getElementById('list-area');
+    var items = [];
+    for (var i = 0; i < allData.length; i++) {
+      var it = allData[i] || {};
+      if (curMonth === 'all' || monthKey(it.timestamp) === curMonth) items.push(it);
+    }
+    document.getElementById('list-count').innerHTML =
+      (curMonth === 'all' ? '전체' : esc(monthLabel(curMonth))) + ' 기도제목 <b>' + items.length + '</b>개';
+    if (items.length === 0) {
+      area.innerHTML = '<div class="state">이 기간에 나눠진 기도제목이 없어요.</div>';
+      return;
+    }
+    if (sortMode === 'name') { area.innerHTML = renderGrouped(items); return; }
+    var sorted = items.slice().sort(function (a, b) { return tsVal(b) - tsVal(a); });
+    var html = '<div class="cards">';
+    for (var j = 0; j < sorted.length; j++) {
+      var p = sorted[j];
+      html += '<div class="card"><div class="card-h"><span class="card-name">' +
+        esc(p.name || '익명') + '</span><span class="card-time">' +
+        esc(fmtTime(p.timestamp)) + '</span></div><div class="card-body">' +
+        esc(p.prayer || '') + '</div></div>';
+    }
+    html += '</div>';
+    area.innerHTML = html;
+  }
+  function renderGrouped(items) {
+    var groups = {};
+    items.forEach(function (it) {
+      var n = it.name || '익명';
+      (groups[n] = groups[n] || []).push(it);
+    });
+    var names = Object.keys(groups).sort(function (a, b) { return a.localeCompare(b, 'ko'); });
+    var html = '<div class="cards">';
+    names.forEach(function (n) {
+      var arr = groups[n].slice().sort(function (a, b) { return tsVal(b) - tsVal(a); });
+      html += '<div class="group"><div class="group-h"><span class="group-name">' + esc(n) +
+        '</span><span class="group-count">' + arr.length + '</span></div><div class="group-items">';
+      arr.forEach(function (it) {
+        html += '<div class="g-item"><div class="g-time">' + esc(fmtTime(it.timestamp)) +
+          '</div><div class="g-body">' + esc(it.prayer || '') + '</div></div>';
+      });
+      html += '</div></div>';
+    });
+    html += '</div>';
+    return html;
   }
 
   function fmtTime(ts) {
